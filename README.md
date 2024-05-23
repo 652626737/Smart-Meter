@@ -95,6 +95,6 @@ const char auth[] = "your_auth_code"; // 替换为您的Blinker认证码
 3.点击上传按钮将代码上传到开发板。
 
 ## 常见问题
-1.env:esp32-solo1开发板是单核的一般plaformio需要替换SDK,可以参考https://github.com/tasmota/arduino-esp32/releases
-2.qq邮箱smtp服务器是smtp.qq.com,端口号465,授权码是邮箱自己获取的,不是密码,频繁使用会封号
-3.Blinker客户端需要注册账号,然后创建项目,获取认证码
+1. env:esp32-solo1开发板是单核的一般plaformio需要替换SDK,可以参考https://github.com/tasmota/arduino-esp32/releases
+2. qq邮箱smtp服务器是smtp.qq.com,端口号465,授权码是邮箱自己获取的,不是密码,频繁使用会封号
+3. Blinker客户端需要注册账号,然后创建项目,获取认证码
