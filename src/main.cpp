@@ -12,8 +12,8 @@
 
 #include <Config.h>                  // 包含 ESP32 的 WiFi 库
 #include "ESP_Mail_Client_Wrapper.h" // 包含 ESP Mail 客户端库
-#include "EEPROM_Manager.h"           // 包含 EEPROMManager 库
-#include "NTPTime_Manager.h"          // 包含 NTPTimeManager 库
+#include "EEPROM_Manager.h"          // 包含 EEPROMManager 库
+#include "NTPTime_Manager.h"         // 包含 NTPTimeManager 库
 #include "Button.h"                  // 包含 Button 库
 
 BlinkerNumber VOLTAGE("Voltage");
@@ -238,7 +238,7 @@ void updateEEPROM()
  * 并发送电费统计邮件。如果上月传感器数据有效，则同样计算能量差值和电费，并发送电费统计邮件。
  * 最后，将当前传感器数据写入EEPROM。
  */
-void sendEmail()
+void sendEmail(bool isUpdate = true)
 {
     // 获取当前年份和月份
     int month = ntpTimeManager.getMonth();
@@ -299,9 +299,10 @@ void sendEmail()
     // 发送电费统计邮件
     String subject = String(year) + "年-" + String(month) + "月电费统计";
     mailWrapper.send_mail(subject, emailContent);
-
-    // 将当前传感器数据写入EEPROM
-    eepromManager.writeFloatData(sensorData.energy);
+    if (isUpdate)
+    {
+        eepromManager.writeFloatData(sensorData.energy);
+    }
 }
 
 void printESP32Info()
@@ -383,7 +384,7 @@ void buttonPressedSendEmail()
         unsigned long currentTime = millis();
         if (currentTime - lastEmailTime >= emailInterval)
         {
-            sendEmail();
+            sendEmail(false);
             lastEmailTime = currentTime;
         }
     }
