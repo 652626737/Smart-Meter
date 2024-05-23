@@ -4,6 +4,12 @@
 ## 简介
 此项目旨在通过 ESP32 实现邮件客户端功能。项目包含多个模块文件，用于管理 WiFi 连接、EEPROM、文件系统等。
 
+## 硬件要求
+- ESP32 开发板（例如：ESP32-Solo1）
+![ESP32] (images/esp32.jpg)
+![ESP32引脚示例图] (images/esp32_pin.jpeg)
+- pzem-004T 电源模块
+![pzem-004T] (images/pzem-004T.jpg)
 ## 目录结构
 ```
 - Button.cpp
@@ -30,6 +36,7 @@
 - [Arduino IDE](https://www.arduino.cc/en/software) 或 [PlatformIO](https://platformio.org/)
 - [ESP32 开发板包](https://github.com/espressif/arduino-esp32)（适用于 Arduino IDE）
 - WiFi 库（通常在 ESP32 开发环境中默认包含）
+- [PlatformIO](https://platformio.org/)库可以离线安装，也可以在线安装。具体参考bilibili视频.
 
 ## 安装
 
