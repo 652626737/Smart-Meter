@@ -54,10 +54,11 @@ board = esp32dev
 framework = arduino
 lib_deps =
     WiFi
-## 使用
+```
+### 使用
 ## 编译和上传
 1.在 config.cpp 文件中编辑您的 WiFi 和邮箱配置：
-
+```cpp
 #include "config.h"
 
 // Wi-Fi credentials
@@ -78,7 +79,9 @@ const long updateInterval = 60000; // 更新间隔，以毫秒为单位
 
 // Authentication code
 const char auth[] = "your_auth_code"; // 替换为您的认证码
+```
 2.打开 main.cpp 文件并确保包含 config.h：
+```cpp
 #include <WiFi.h>
 #include "config.h"
 
@@ -98,6 +101,7 @@ void setup() {
 void loop() {
     // 主要代码放在这里
 }
+```
 3.选择正确的开发板和端口。
 
 4.点击上传按钮将代码上传到开发板。
