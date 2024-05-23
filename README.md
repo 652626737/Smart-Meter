@@ -5,25 +5,23 @@
 此项目旨在通过 ESP32 实现邮件客户端功能。项目包含多个模块文件，用于管理 WiFi 连接、EEPROM、文件系统等。
 
 ## 目录结构
-
-├── src
-│ ├── ESP_Mail_Client_Wrapper.cpp
-│ ├── ESP_Mail_Client_Wrapper.h
-│ ├── Button.h
-│ ├── config.cpp
-│ ├── config.h
-│ ├── EEPROMManager.cpp
-│ ├── EEPROMManager.h
-│ ├── LittleFSManager.cpp
-│ ├── LittleFSManager.h
-│ ├── main.cpp
-│ ├── NTPTimeManager.cpp
-│ ├── NTPTimeManager.h
-│ ├── SpiffsManager.cpp
-│ ├── SpiffsManager.h
-├── Smart Meter.code-workspace
-├── main.txt
-
+```
+- Button.cpp
+- Button.h
+- Config.h
+- Config.cpp
+- EEPROMManager.cpp
+- EEPROMManager.h
+- ESP_Mail_Client_Wrapper.cpp
+- ESP_Mail_Client_Wrapper.h
+- LittleFS_Manager.h
+- LittleFS_Manager.cpp
+- NTPTime_Manager.cpp
+- NTPTime_Manager.h
+- Spiffs_Manager.cpp
+- Spiffs_Manager.h
+- main.cpp
+```
 
 ## 依赖项
 
