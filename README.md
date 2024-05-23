@@ -6,10 +6,10 @@
 
 ## 硬件要求
 - ESP32 开发板（例如：ESP32-Solo1）
-![ESP32] (images/esp32.jpg)
-![ESP32引脚示例图] (images/esp32_pin.jpeg)
+![ESP32](images/esp32.jpg)
+![ESP32引脚示例图](images/esp32_pin.jpeg)
 - pzem-004T 电源模块
-![pzem-004T] (images/pzem-004T.jpg)
+![pzem-004T](images/pzem-004T.jpg)
 ## 目录结构
 ```
 - Button.cpp
