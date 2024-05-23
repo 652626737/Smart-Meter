@@ -48,15 +48,25 @@
 2. 创建一个新的 PlatformIO 项目，选择 `esp32dev` 开发板。
 3. 在 `platformio.ini` 文件中添加所需的依赖项：
 ```ini
-[env:esp32dev]
+[env:esp32-solo1]
 platform = espressif32
-board = esp32dev
+board = esp32-solo1
 framework = arduino
-lib_deps =
-    WiFi
+upload_protocol = esptool
+upload_speed = 115200
+monitor_speed = 115200
+board_build.f_cpu = 16000000L
+build_flags = -D PIO_FRAMEWORK_ARDUINO_MMU_EXTERNAL_128K
+board_build.partitions = no_ota.csv
+lib_deps = 
+	joysfera/Tasker@^2.0.3
+	mandulaj/PZEM-004T-v30@^1.1.2
+	mobizt/ESP Mail Client@^3.4.19
+	arduino-libraries/NTPClient@^3.2.1
+	paulstoffregen/Time@^1.6.1
 ```
-### 使用
-## 编译和上传
+## 使用
+### 编译和上传
 1.在 config.cpp 文件中编辑您的 WiFi 和邮箱配置：
 ```cpp
 #include "config.h"
@@ -78,30 +88,13 @@ const long timeOffset = 0; // 时区偏移，以秒为单位
 const long updateInterval = 60000; // 更新间隔，以毫秒为单位
 
 // Authentication code
-const char auth[] = "your_auth_code"; // 替换为您的认证码
+const char auth[] = "your_auth_code"; // 替换为您的Blinker认证码
 ```
-2.打开 main.cpp 文件并确保包含 config.h：
-```cpp
-#include <WiFi.h>
-#include "config.h"
+2.选择正确的开发板和端口。
 
-void setup() {
-    Serial.begin(115200);
-    WiFi.begin(ssid, password);
+3.点击上传按钮将代码上传到开发板。
 
-    // 检查连接状态
-    while (WiFi.status() != WL_CONNECTED) {
-        delay(1000);
-        Serial.println("正在连接到WiFi...");
-    }
-
-    Serial.println("WiFi 已连接");
-}
-
-void loop() {
-    // 主要代码放在这里
-}
-```
-3.选择正确的开发板和端口。
-
-4.点击上传按钮将代码上传到开发板。
+## 常见问题
+1.env:esp32-solo1开发板是单核的一般plaformio需要替换SDK,可以参考https://github.com/tasmota/arduino-esp32/releases
+2.qq邮箱smtp服务器是smtp.qq.com,端口号465,授权码是邮箱自己获取的,不是密码,频繁使用会封号
+3.Blinker客户端需要注册账号,然后创建项目,获取认证码
