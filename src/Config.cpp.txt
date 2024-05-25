@@ -1,7 +1,7 @@
 #include "Config.h"
 
 // Wi-Fi credentials
-const char *ssid = "OpenWrt2.4";    // 替换为您的 Wi-Fi SSID
+const char *ssid = "OpenWrt2.4";    //const 替换为您的 Wi-Fi SSID
 const char *password = "12340987."; // 替换为您的 Wi-Fi 密码
 
 // SMTP server details

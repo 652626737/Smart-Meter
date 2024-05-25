@@ -1,0 +1,19 @@
+{
+    "wifi": {
+        "ssid": "OpenWrt2.4",
+        "password": "12340987."
+    },
+    "email": {
+        "smtpserver": "smtp.gmail.com",
+        "emailFrom": "emailFrom",
+        "passwordemail": "passwordemail",
+        "emailTo": "emailTo"
+    },
+    "blinker": {
+        "auth": "auth"
+    },
+    "sender": {
+        "sendday": 1,
+        "sendtime": 10
+    }
+}
