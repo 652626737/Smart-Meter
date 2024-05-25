@@ -4,7 +4,7 @@
 
 EEPROMManager::EEPROMManager(int address) : address_(address)
 {
-    EEPROM.begin(512);
+    EEPROM.begin(128);
 }
 
 /**

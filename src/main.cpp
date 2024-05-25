@@ -3,18 +3,46 @@
 #include <PZEM004Tv30.h>
 #include <Tasker.h>
 #include <EEPROM.h>
-#include <WiFi.h>
 #include <esp_system.h>
 #include <esp_spi_flash.h>
 #include <esp_ota_ops.h>
 #include <NTPClient.h> // 包含NTPClient库
 #include <WiFiUdp.h>   // 包含WiFiUDP库
+#include <cJSON.h>
+#include <LittleFS.h>
+#include <WebServer.h>
+#include <WiFi.h>
+#include <Arduino.h>
 
-#include <Config.h>                  // 包含 ESP32 的 WiFi 库
+// #include <Config.h>                  // 包含 ESP32 的 WiFi 库
 #include "ESP_Mail_Client_Wrapper.h" // 包含 ESP Mail 客户端库
 #include "EEPROM_Manager.h"          // 包含 EEPROMManager 库
 #include "NTPTime_Manager.h"         // 包含 NTPTimeManager 库
-#include "Button.h"                  // 包含 Button 库
+#include "Button.h"
+
+#define FILESYSTEM LittleFS
+// You only need to format the filesystem once
+#define FORMAT_FILESYSTEM false
+#define DBG_OUTPUT_PORT Serial
+
+#define APP_VERSION "0.1.1"
+
+String ssid = "";
+String password = "";
+String smtpServer = "";
+int smtpPort = 465;
+String emailFrom = "";
+String passwordemail = "";
+String emailTo = "";
+String auth = "";
+int sendday = 1;
+int sendtime = 10;
+
+String apSSID;
+
+File fsUploadFile;
+
+/************************************************************************************/
 
 BlinkerNumber VOLTAGE("Voltage");
 BlinkerNumber CURRENT("current");
@@ -23,13 +51,22 @@ BlinkerText ENERGY("energy");
 BlinkerNumber FREQUENCY("frequency");
 BlinkerNumber PF("pf");
 
-ESP_Mail_Client_Wrapper mailWrapper;
+const char *host = "esp32-solo1";
+
+ESP_Mail_Client_Wrapper mailWrapper(
+    smtpServer, smtpPort, emailFrom, passwordemail, emailTo);
 WiFiUDP ntpUDP;
+
+extern WebServer server(80);
+
+const long updateInterval = 60000; // 更新间隔，以毫秒为单位
+const char *ntpServer = smtpServer.c_str();
+const long timeOffset = 0; // 时区偏移，以秒为单位
+
 NTPTimeManager ntpTimeManager(ntpServer, timeOffset, updateInterval); // NTP服务器, 时区偏移（以秒为单位）, 更新间隔（以毫秒为单位）
 
 bool emailSent = false;            // 邮件是否已经发送
 bool Debug = false;                // 调试模式
-int Runday = 20;                   // 每月发送邮件日期
 int updatesensorData_interval = 5; // 读取传感器数据的间隔时间（秒）
 int updateEEPROM_interval = 60;    // 更新 EEPROM 的间隔时间（分钟）
 int eepromAddress = 0;             // EEPROM 地址
@@ -42,6 +79,9 @@ const unsigned long emailInterval = 1000; // 1 second interval
 #define PZEM_SERIAL Serial2
 
 PZEM004Tv30 pzem(PZEM_SERIAL, PZEM_RX_PIN, PZEM_TX_PIN);
+
+// holds the current upload
+// File fsUploadFile;
 
 // 创建一个定时器对象
 Tasker tasker;
@@ -361,12 +401,12 @@ void sendMonthlyEmail()
     int hour = ntpTimeManager.getHour();
 
     // 检查日期、时间和是否已发送邮件的标志
-    if (day == Runday && !emailSent && hour == 10)
+    if (day == sendday && !emailSent && hour == sendtime)
     {
         sendEmail();
         emailSent = true; // 邮件发送成功后，将 emailSent 标志设置为 true
     }
-    else if (day != Runday)
+    else if (day != sendday)
     {
         emailSent = false; // 如果不是发送邮件的日子，则重置标志
     }
@@ -390,76 +430,571 @@ void buttonPressedSendEmail()
     }
 }
 
+void wifiSetup()
+{
+    DBG_OUTPUT_PORT.println("wifiSetup");
+    uint8_t mac[6] = {0};
+    char ssidStr[32] = {0};
+    int attempts = 0;
+
+    WiFi.disconnect(true);
+    delay(1000);
+
+    Serial.println("WiFi: Set mode to WIFI_AP_STA");
+    WiFi.mode(WIFI_AP_STA);
+
+    // Retry connecting to Wi-Fi network up to 5 times
+    while (attempts < 5 && WiFi.status() != WL_CONNECTED)
+    {
+        Serial.printf("Attempt %d to connect to Wi-Fi...\n", attempts + 1);
+
+        // Try to connect to the Wi-Fi network
+        if (WiFi.begin(ssid.c_str(), password.c_str()) == WL_CONNECTED)
+        {
+            Serial.println("Connected to Wi-Fi.");
+            break;
+        }
+
+        attempts++;
+        delay(1000); // Wait 1 seconds before retrying
+    }
+
+    if (WiFi.status() != WL_CONNECTED)
+    {
+        Serial.println("Failed to connect to Wi-Fi after 5 attempts. Starting Access Point mode.");
+
+        WiFi.mode(WIFI_AP);
+        // Generate SSID for Access Point
+        WiFi.softAPmacAddress(mac);
+        sprintf(ssidStr, "ESP-%02X%02X%02X", mac[3], mac[4], mac[5]);
+
+        // Create soft Access Point
+        if (WiFi.softAP(ssidStr))
+        {
+            apSSID = String(ssidStr);
+            Serial.println("WiFi: softAP has been established");
+            Serial.printf("WiFi: please connect to the %s\r\n", apSSID);
+        }
+        else
+        {
+            Serial.println("WiFi: failed to create softAP");
+        }
+    }
+}
+
+void appLoadDateBase(void)
+{
+
+    DBG_OUTPUT_PORT.println("appLoadDateBase");
+
+    File dbfile = FILESYSTEM.open("/db.json", "r");
+    if (!dbfile)
+    {
+        DBG_OUTPUT_PORT.println("Error opening file.");
+        return;
+    }
+
+    char *buffer = (char *)malloc(dbfile.size());
+
+    while (dbfile.available())
+    {
+        dbfile.readBytes(buffer, dbfile.size());
+    }
+
+    DBG_OUTPUT_PORT.println(buffer);
+
+    cJSON *rootObject = cJSON_ParseWithLength(buffer, dbfile.size());
+    if (rootObject == NULL)
+    {
+        dbfile.close();
+        return;
+    }
+
+    cJSON *wifiObject = cJSON_GetObjectItem(rootObject, "wifi");
+
+    cJSON *ssidObject = cJSON_GetObjectItem(wifiObject, "ssid");
+    cJSON *psdObject = cJSON_GetObjectItem(wifiObject, "password");
+
+    cJSON *emailObject = cJSON_GetObjectItem(rootObject, "email");
+    cJSON *smserverObject = cJSON_GetObjectItem(emailObject, "smtpserver");
+    cJSON *emailFromObject = cJSON_GetObjectItem(emailObject, "emailFrom");
+    cJSON *pawoemaObject = cJSON_GetObjectItem(emailObject, "passwordemail");
+    cJSON *emailToObject = cJSON_GetObjectItem(emailObject, "emailTo");
+
+    cJSON *blinkerObject = cJSON_GetObjectItem(rootObject, "blinker");
+    cJSON *authObject = cJSON_GetObjectItem(blinkerObject, "auth");
+
+    cJSON *senderObject = cJSON_GetObjectItem(rootObject, "sender");
+    cJSON *SdayObjectObject = cJSON_GetObjectItem(senderObject, "sendday");
+    cJSON *SendTimeObjectObject = cJSON_GetObjectItem(senderObject, "sendtime");
+
+    ssid = ssidObject->valuestring;
+    password = psdObject->valuestring;
+    smtpServer = smserverObject->valuestring;
+    emailFrom = emailFromObject->valuestring;
+    passwordemail = pawoemaObject->valuestring;
+    emailTo = emailToObject->valuestring;
+    auth = authObject->valuestring;
+    sendday = SdayObjectObject->valueint;
+    sendtime = SendTimeObjectObject->valueint;
+
+    DBG_OUTPUT_PORT.print("ssid: ");
+    DBG_OUTPUT_PORT.println(ssid);
+    DBG_OUTPUT_PORT.print("password: ");
+    DBG_OUTPUT_PORT.println(password);
+
+    free(buffer);
+    cJSON_Delete(rootObject);
+    dbfile.close();
+
+    DBG_OUTPUT_PORT.println("appLoadDateBase");
+}
+
+void getStatus()
+{
+    cJSON *rspObject = NULL;
+    cJSON *sysObject = NULL;
+    cJSON *archObject = NULL;
+    cJSON *memObject = NULL;
+    cJSON *fsObject = NULL;
+    cJSON *apObject = NULL;
+    cJSON *staObject = NULL;
+
+    rspObject = cJSON_CreateObject();
+    if (rspObject == NULL)
+    {
+        goto OUT1;
+    }
+
+    sysObject = cJSON_CreateObject();
+    if (sysObject == NULL)
+    {
+        goto OUT;
+    }
+    cJSON_AddItemToObject(rspObject, "sys", sysObject);
+    cJSON_AddStringToObject(sysObject, "model", "ESP32S3 Dev Module");
+    cJSON_AddStringToObject(sysObject, "fw", APP_VERSION);
+    cJSON_AddStringToObject(sysObject, "sdk", ESP.getSdkVersion());
+    archObject = cJSON_CreateObject();
+    if (archObject == NULL)
+    {
+        goto OUT;
+    }
+    cJSON_AddItemToObject(sysObject, "arch", archObject);
+    cJSON_AddStringToObject(archObject, "mfr", "Espressif");
+    cJSON_AddStringToObject(archObject, "model", ESP.getChipModel());
+    cJSON_AddNumberToObject(archObject, "revision", ESP.getChipRevision());
+    if (!strncmp(ESP.getChipModel(), "ESP32-S3", strlen("ESP32-S3")))
+    {
+        cJSON_AddStringToObject(archObject, "cpu", "XTensa® dual-core LX7");
+    }
+    else if (!strncmp(ESP.getChipModel(), "ESP32-S2", strlen("ESP32-S2")))
+    {
+        cJSON_AddStringToObject(archObject, "cpu", "XTensa® single-core LX7");
+    }
+    else if (!strncmp(ESP.getChipModel(), "ESP32-C3", strlen("ESP32-C3")))
+    {
+        cJSON_AddStringToObject(archObject, "cpu", "RISC-V");
+    }
+    else if (!strncmp(ESP.getChipModel(), "ESP32", strlen("ESP32")))
+    {
+        cJSON_AddStringToObject(archObject, "cpu", "XTensa® dual-core LX6");
+    }
+    cJSON_AddNumberToObject(archObject, "freq", ESP.getCpuFreqMHz());
+
+    memObject = cJSON_CreateObject();
+    if (memObject == NULL)
+    {
+        goto OUT;
+    }
+    cJSON_AddItemToObject(rspObject, "mem", memObject);
+    cJSON_AddNumberToObject(memObject, "total", ESP.getHeapSize());
+    cJSON_AddNumberToObject(memObject, "free", ESP.getFreeHeap());
+
+    fsObject = cJSON_CreateObject();
+    if (fsObject == NULL)
+    {
+        goto OUT;
+    }
+    cJSON_AddItemToObject(rspObject, "fs", fsObject);
+    cJSON_AddNumberToObject(fsObject, "total", FILESYSTEM.totalBytes());
+    cJSON_AddNumberToObject(fsObject, "used", FILESYSTEM.usedBytes());
+    cJSON_AddNumberToObject(fsObject, "free", FILESYSTEM.totalBytes() - FILESYSTEM.usedBytes());
+
+    apObject = cJSON_CreateObject();
+    if (apObject == NULL)
+    {
+        goto OUT;
+    }
+    cJSON_AddItemToObject(rspObject, "ap", apObject);
+    cJSON_AddStringToObject(apObject, "ssid", WiFi.softAPSSID().c_str());
+    cJSON_AddNumberToObject(apObject, "num", WiFi.softAPgetStationNum());
+
+    staObject = cJSON_CreateObject();
+    if (staObject == NULL)
+    {
+        goto OUT;
+    }
+    cJSON_AddItemToObject(rspObject, "sta", staObject);
+    cJSON_AddStringToObject(staObject, "ssid", ssid.c_str());
+    cJSON_AddStringToObject(staObject, "status", WiFi.isConnected() ? "connected" : "disconnect");
+
+    server.send(200, "application/json", cJSON_Print(rspObject));
+OUT:
+    cJSON_Delete(rspObject);
+OUT1:
+    return;
+}
+
+void getConfig()
+{
+    File file = FILESYSTEM.open("/db.json", "r");
+    size_t sent = server.streamFile(file, "application/json");
+    file.close();
+    return;
+}
+
+void postConfig()
+{
+
+    cJSON *reqObject = NULL;
+    cJSON *wifiObject = NULL;
+    cJSON *emailObject = NULL;
+    cJSON *blinkerObject = NULL;
+    cJSON *SenderObject = NULL;
+
+    bool flag = false;
+
+    String content = server.arg("plain");
+
+    reqObject = cJSON_Parse(content.c_str());
+    if (reqObject == NULL)
+    {
+        Serial.println("JSON parse error");
+        Serial.print("payload: ");
+        Serial.println(server.arg("plain"));
+        return;
+    }
+
+    wifiObject = cJSON_GetObjectItem(reqObject, "wifi");
+    if (wifiObject)
+    {
+        cJSON *ssidObject = cJSON_GetObjectItem(wifiObject, "ssid");
+        if (String(ssidObject->valuestring) != ssid)
+        {
+            ssid = ssidObject->valuestring;
+            flag = true;
+        }
+        cJSON *psdObject = cJSON_GetObjectItem(wifiObject, "password");
+        if (String(psdObject->valuestring) != password)
+        {
+            password = psdObject->valuestring;
+            flag = true;
+        }
+    }
+
+    emailObject = cJSON_GetObjectItem(reqObject, "email");
+    if (emailObject)
+    {
+        cJSON *smserverObject = cJSON_GetObjectItem(emailObject, "smtpserver");
+        if (String(smserverObject->valuestring) != smtpServer)
+        {
+            smtpServer = smserverObject->valuestring;
+            flag = true;
+        }
+        cJSON *emailFromObject = cJSON_GetObjectItem(emailObject, "emailFrom");
+        if (String(emailFromObject->valuestring) != emailFrom)
+        {
+            emailFrom = emailFromObject->valuestring;
+            flag = true;
+        }
+        cJSON *pawoemaObject = cJSON_GetObjectItem(emailObject, "passwordemail");
+        if (String(pawoemaObject->valuestring) != passwordemail)
+        {
+            passwordemail = pawoemaObject->valuestring;
+            flag = true;
+        }
+
+        cJSON *emailToObject = cJSON_GetObjectItem(emailObject, "emailTo");
+        if (String(emailToObject->valuestring) != emailTo)
+        {
+            emailTo = emailToObject->valuestring;
+            flag = true;
+        }
+    }
+
+    blinkerObject = cJSON_GetObjectItem(reqObject, "blinker");
+    if (blinkerObject)
+    {
+        cJSON *authObject = cJSON_GetObjectItem(blinkerObject, "auth");
+        if (String(authObject->valuestring) != auth)
+        {
+            auth = authObject->valuestring;
+            flag = true;
+        }
+    }
+
+    SenderObject = cJSON_GetObjectItem(reqObject, "sender");
+    if (SenderObject)
+    {
+        cJSON *SdayObjectObject = cJSON_GetObjectItem(SenderObject, "sendday");
+        if (SdayObjectObject->valueint != sendday)
+        {
+            sendday = SdayObjectObject->valueint;
+            flag = true;
+        }
+        cJSON *SendTimeObjectObject = cJSON_GetObjectItem(SenderObject, "sendtime");
+        if (SendTimeObjectObject->valueint != sendtime)
+        {
+            sendtime = SendTimeObjectObject->valueint;
+            flag = true;
+        }
+    }
+
+    File configfile = FILESYSTEM.open("/db.json", FILE_WRITE);
+    configfile.write((const uint8_t *)content.c_str(), content.length());
+    configfile.close();
+
+    server.send(201, "application/json", server.arg("plain"));
+
+    if (flag)
+    {
+        // WiFi.disconnect();
+        // delay(1000);
+        // WiFi.begin(ssid.c_str(), password.c_str());
+        ESP.restart();
+    }
+
+    return;
+}
+
+void onServeStaticSubDir(File &dir, String topDir)
+{
+    File file = dir.openNextFile();
+    while (file)
+    {
+        String path = String(file.path());
+        String uri = path.substring(path.indexOf(topDir) + topDir.length(), path.indexOf(".gz"));
+        server.serveStatic(uri.c_str(), FILESYSTEM, path.c_str());
+        DBG_OUTPUT_PORT.print("uri: ");
+        DBG_OUTPUT_PORT.println(uri);
+        DBG_OUTPUT_PORT.print("path: ");
+        DBG_OUTPUT_PORT.println(path);
+        file = dir.openNextFile();
+    }
+}
+
+void onServeStatic(String dir)
+{
+    File wwwDir = FILESYSTEM.open(dir);
+
+    if (wwwDir.isDirectory())
+    {
+        File file = wwwDir.openNextFile();
+        while (file)
+        {
+            if (file.isDirectory())
+            {
+                file = FILESYSTEM.open(file.path());
+                onServeStaticSubDir(file, dir);
+            }
+            else
+            {
+                String path = String(file.path());
+                String uri = path.substring(path.indexOf(dir) + dir.length(), path.indexOf(".gz"));
+                server.serveStatic(uri.c_str(), FILESYSTEM, path.c_str());
+                DBG_OUTPUT_PORT.print("uri: ");
+                DBG_OUTPUT_PORT.println(uri);
+                DBG_OUTPUT_PORT.print("path: ");
+                DBG_OUTPUT_PORT.println(path);
+            }
+            file = wwwDir.openNextFile();
+        }
+    }
+}
+
+String formatBytes(size_t bytes)
+{
+    if (bytes < 1024)
+    {
+        return String(bytes) + "B";
+    }
+    else if (bytes < (1024 * 1024))
+    {
+        return String(bytes / 1024.0) + "KB";
+    }
+    else if (bytes < (1024 * 1024 * 1024))
+    {
+        return String(bytes / 1024.0 / 1024.0) + "MB";
+    }
+    else
+    {
+        return String(bytes / 1024.0 / 1024.0 / 1024.0) + "GB";
+    }
+}
+
 void setup()
 {
     // 初始化串口通信，波特率为115200
     Serial.begin(115200);
     // 等待1秒
     delay(1000);
+    Serial.println("_________________________________________________________________________________________");
+    if (FORMAT_FILESYSTEM)
+        FILESYSTEM.format();
+    FILESYSTEM.begin();
+    {
+        File root = FILESYSTEM.open("/");
+        File file = root.openNextFile();
+        while (file)
+        {
+            String fileName = file.name();
+            size_t fileSize = file.size();
+            DBG_OUTPUT_PORT.printf("FS File: %s, size: %s\n", fileName.c_str(), formatBytes(fileSize).c_str());
+            file = root.openNextFile();
+        }
+        DBG_OUTPUT_PORT.printf("\n");
+    }
+    appLoadDateBase();
 
+    wifiSetup();
+
+    server.serveStatic("/", FILESYSTEM, "/www/index.html");
+    onServeStatic("/www");
+
+    server.on("/api/v1/status", HTTP_GET, getStatus);
+    server.on("/api/v1/config", HTTP_GET, getConfig);
+    server.on("/api/v1/config", HTTP_POST, postConfig);
+
+    server.on(
+        "/api/v1/update", HTTP_POST, []()
+        {
+      server.sendHeader("Connection", "close");
+      server.send(200, "text/plain", (Update.hasError()) ? "FAIL" : "OK");
+      ESP.restart(); },
+        []()
+        {
+            HTTPUpload &upload = server.upload();
+            if (upload.status == UPLOAD_FILE_START)
+            {
+                Serial.setDebugOutput(true);
+                Serial.printf("Update: %s\n", upload.filename.c_str());
+                if (!Update.begin())
+                { // start with max available size
+                    Update.printError(Serial);
+                }
+            }
+            else if (upload.status == UPLOAD_FILE_WRITE)
+            {
+                if (Update.write(upload.buf, upload.currentSize) != upload.currentSize)
+                {
+                    Update.printError(Serial);
+                }
+            }
+            else if (upload.status == UPLOAD_FILE_END)
+            {
+                if (Update.end(true))
+                { // true to set the size to the current progress
+                    Serial.printf("Update Success: %u\nRebooting...\n", upload.totalSize);
+                }
+                else
+                {
+                    Update.printError(Serial);
+                }
+                Serial.setDebugOutput(false);
+            }
+            else
+            {
+                Serial.printf("Update Failed Unexpectedly (likely broken connection): status=%d\n", upload.status);
+            }
+        });
+    server.onNotFound([]()
+                      { server.send(404, "text/plain", "FileNotFound"); });
+
+    server.begin();
+    DBG_OUTPUT_PORT.println("HTTP server started");
+
+    Serial.println("_________________________________________________________________________________________");
     // 输出欢迎信息
-    Serial.print("Welcome to ESP32 Smart Meters");
+    Serial.println("_______________Welcome to ESP32 Smart Meters_______________");
     // 打印ESP32相关信息
     printESP32Info();
 
-    // 初始化Blinker，并设置认证信息、SSID和密码
-    Blinker.begin(auth, ssid, password);
-    // 注册心跳包
-    Blinker.attachHeartbeat(heartbeat); // 注册心跳包
-    // 设置定时器，执行一次UPsensorData函数更新
-    tasker.setInterval(updatesensorData, updatesensorData_interval * 1000, 0);
-    // 设置定时器，按照设定的时间间隔执行updateEEPROMTask函数
-    updateEEPROMTask.setInterval(updateEEPROM, updateEEPROM_interval * 1000 * 60, 0);
-    // 设置定时器，每分钟执行一次sendEmail函数
-
-    // 连接Wi-Fi
-    WiFi.begin(ssid, password);
-    // 输出正在连接到Wi-Fi的信息
-    Serial.print("连接到 Wi-Fi");
-    // 循环等待Wi-Fi连接成功
-    while (WiFi.status() != WL_CONNECTED)
+    if (WiFi.status() == WL_CONNECTED)
     {
-        // 输出等待提示
-        Serial.print(".");
-        // 等待300毫秒
-        delay(300);
+        Serial.println("WiFi connected, initializing Blinker.");
+
+        const char *Blinker_auth = auth.c_str();
+        const char *Blinker_ssid = ssid.c_str();
+        const char *Blinker_password = password.c_str();
+        // 初始化Blinker，并设置认证信息、SSID和密码
+        Blinker.begin(Blinker_auth, Blinker_ssid, Blinker_password);
+        Blinker.attachHeartbeat(heartbeat); // 注册心跳包
+
+        // 设置定时器，执行一次UPsensorData函数更新
+        tasker.setInterval(updatesensorData, updatesensorData_interval * 1000, 0);
+        // 设置定时器，按照设定的时间间隔执行updateEEPROMTask函数
+        updateEEPROMTask.setInterval(updateEEPROM, updateEEPROM_interval * 1000 * 60, 0);
+        // 设置定时器，每分钟执行一次sendEmail函数
+
+        // 连接Wi-Fi
+        // WiFi.begin(ssid.c_str(), password.c_str());
+        // 输出正在连接到Wi-Fi的信息
+        // Serial.print("连接到 Wi-Fi");
+        // 循环等待Wi-Fi连接成功
+        // while (WiFi.status() != WL_CONNECTED)
+        // {
+        //     // 输出等待提示
+        //     Serial.print(".");
+        //     // 等待300毫秒
+        //     delay(300);
+        // }
+        // // 换行
+        // Serial.println();
+        // // 输出已连接的IP地址
+        // Serial.print("Connected with IP: ");
+        // Serial.println(WiFi.localIP());
+        // // 换行
+        // Serial.println();
+
+        // 初始化NTP时间管理器
+        ntpTimeManager.begin();
+
+        // 初始化EEPROM管理器
+        EEPROMManager eepromManager_1(eepromAddress);
+        // 定义并初始化SensorData结构体变量readData
+        SensorData readData;
+        // 从EEPROM中读取传感器数据并保存到readData中
+        readData = eepromManager_1.readSensorData();
+
+        // 输出从EEPROM中读取的传感器数据
+        Serial.println("Sensor data read from EEPROM:");
+        Serial.print("Voltage: ");
+        Serial.println(readData.voltage);
+        Serial.print("Current: ");
+        Serial.println(readData.current);
+        Serial.print("Power: ");
+        Serial.println(readData.power);
+        Serial.print("Energy: ");
+        Serial.println(readData.energy);
+        Serial.print("Frequency: ");
+        Serial.println(readData.frequency);
+        Serial.print("PF: ");
+        Serial.println(readData.pf);
     }
-    // 换行
-    Serial.println();
-    // 输出已连接的IP地址
-    Serial.print("Connected with IP: ");
-    Serial.println(WiFi.localIP());
-    // 换行
-    Serial.println();
-
-    // 初始化NTP时间管理器
-    ntpTimeManager.begin();
-
-    // 初始化EEPROM管理器
-    EEPROMManager eepromManager_1(eepromAddress);
-    // 定义并初始化SensorData结构体变量readData
-    SensorData readData;
-    // 从EEPROM中读取传感器数据并保存到readData中
-    readData = eepromManager_1.readSensorData();
-
-    // 输出从EEPROM中读取的传感器数据
-    Serial.println("Sensor data read from EEPROM:");
-    Serial.print("Voltage: ");
-    Serial.println(readData.voltage);
-    Serial.print("Current: ");
-    Serial.println(readData.current);
-    Serial.print("Power: ");
-    Serial.println(readData.power);
-    Serial.print("Energy: ");
-    Serial.println(readData.energy);
-    Serial.print("Frequency: ");
-    Serial.println(readData.frequency);
-    Serial.print("PF: ");
-    Serial.println(readData.pf);
+    else
+    {
+        while (true)
+        {
+            server.handleClient();
+        }
+    }
 }
 
 void loop()
 {
+
+    server.handleClient();
     // 更新网络时间
     ntpTimeManager.updateTime();
 

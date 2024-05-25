@@ -1,10 +1,11 @@
 #include <WiFi.h>
 #include "ESP_Mail_Client_Wrapper.h"
-#include "Config.h"
+
 
 ESP_Mail_Client_Wrapper *ESP_Mail_Client_Wrapper::instance = nullptr;
 
-ESP_Mail_Client_Wrapper::ESP_Mail_Client_Wrapper()
+ESP_Mail_Client_Wrapper::ESP_Mail_Client_Wrapper(const String &smtpServer, 
+int smtpPort, const String &emailFrom, const String &passwordEmail, const String &emailTo)
 {
     instance = this;
     MailClient.networkReconnect(true);
@@ -13,15 +14,20 @@ ESP_Mail_Client_Wrapper::ESP_Mail_Client_Wrapper()
 
     smtp.callback(smtpCallbackStatic);
 
-    config.server.host_name = smtpServer;
+    config.server.host_name = smtpServer.c_str();
     config.server.port = smtpPort;
-    config.login.email = emailFrom;
-    config.login.password = passwordEmail;
+    config.login.email = emailFrom.c_str();
+    config.login.password = passwordEmail.c_str();
     config.login.user_domain = F("127.0.0.1");
 
     config.time.ntp_server = F("cn.ntp.org.cn");
     config.time.gmt_offset = 8;
     config.time.day_light_offset = 0;
+
+    // 保存 emailTo 到成员变量中
+    this->emailFrom = emailFrom;
+    this->emailTo = emailTo;
+
 }
 
 void ESP_Mail_Client_Wrapper::send_mail(const String &subject,const String &additionalContent)
@@ -31,9 +37,9 @@ void ESP_Mail_Client_Wrapper::send_mail(const String &subject,const String &addi
     SMTP_Message message;
     
     message.sender.name = F("Smart Meter");
-    message.sender.email = emailFrom;
+    message.sender.email = emailFrom.c_str();
     message.subject = F(subject);
-    message.addRecipient(F(emailTo), emailTo);
+    message.addRecipient(F(emailTo.c_str()), emailTo.c_str());
     message.text.flowed = true;
     message.text.content += additionalContent;
     message.text.charSet = F("UTF-8");
