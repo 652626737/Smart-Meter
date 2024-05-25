@@ -71,35 +71,16 @@ lib_deps =
 	paulstoffregen/Time@^1.6.1
 ```
 ## 使用
-### 编译和上传
-1.在 config.cpp 文件中编辑您的 WiFi 和邮箱配置：
-```cpp
-#include "config.h"
-
-// Wi-Fi credentials
-const char *ssid = "your_SSID";    // 替换为您的 Wi-Fi SSID
-const char *password = "your_PASSWORD"; // 替换为您的 Wi-Fi 密码
-
-// SMTP server details
-const char *smtpServer = "smtp.qq.com";
-const int smtpPort = 465;
-const char *emailFrom = "your_email@example.com"; // 替换为您的邮箱地址
-const char *passwordEmail = "your_email_password"; // 替换为您的邮箱密码
-const char *emailTo = "recipient_email@example.com"; // 替换为收件人的邮箱地址
-
-// NTP server details
-const char *ntpServer = "ntp1.aliyun.com";
-const long timeOffset = 0; // 时区偏移，以秒为单位
-const long updateInterval = 60000; // 更新间隔，以毫秒为单位
-
-// Authentication code
-const char auth[] = "your_auth_code"; // 替换为您的Blinker认证码
-```
-2.选择正确的开发板和端口。
-
-3.点击上传按钮将代码上传到开发板。
+### 配置
+1.在 网页中编辑您的 WiFi 和邮箱配置：
+![配置页面](images/Xnip2024-05-25_19-03-58.png)
+2.BlinkerAUTH为下图密钥。
+![BlinkerAUTH](/images/Xnip2024-05-25_19-08-46.png)
 
 ## 常见问题
 1. env:esp32-solo1开发板是单核的一般plaformio需要替换SDK,可以参考https://github.com/tasmota/arduino-esp32/releases
 2. qq邮箱smtp服务器是smtp.qq.com,端口号465,授权码是邮箱自己获取的,不是密码,频繁使用会封号
 3. Blinker客户端需要注册账号,然后创建项目,获取认证码
+
+## 项目参考
+1. [https://github.com/lbuque/esp32-vue3demo](https://github.com/lbuque/esp32-vue3demo)
