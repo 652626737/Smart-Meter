@@ -57,6 +57,7 @@ ESP_Mail_Client_Wrapper mailWrapper(
     smtpServer, smtpPort, emailFrom, passwordemail, emailTo);
 WiFiUDP ntpUDP;
 
+
 extern WebServer server(80);
 
 const long updateInterval = 60000; // 更新间隔，以毫秒为单位
@@ -153,20 +154,20 @@ void heartbeat()
         sensorData.frequency = 0.0;
         sensorData.pf = 0.0;
         // 发送实时数据到云平台
-        Blinker.sendRtData("energy", sensorData.energy);
-        Blinker.sendRtData("Voltage", sensorData.voltage);
-        Blinker.sendRtData("current", sensorData.current);
-        Blinker.sendRtData("power", sensorData.power);
-        Blinker.sendRtData("frequency", sensorData.frequency);
+        Blinker.sendRtData("energy", String(sensorData.energy));
+        Blinker.sendRtData("Voltage", String(sensorData.voltage));
+        Blinker.sendRtData("current", String(sensorData.current));
+        Blinker.sendRtData("power", String(sensorData.power));
+        Blinker.sendRtData("frequency", String(sensorData.frequency));
         // Blinker.sendRtData("pf", pzem.pf());
     }
     else
     {
-        Blinker.sendRtData("energy", sensorData.energy);
-        Blinker.sendRtData("Voltage", sensorData.voltage);
-        Blinker.sendRtData("current", sensorData.current);
-        Blinker.sendRtData("power", sensorData.power);
-        Blinker.sendRtData("frequency", sensorData.frequency);
+        Blinker.sendRtData("energy", String(sensorData.energy));
+        Blinker.sendRtData("Voltage", String(sensorData.voltage));
+        Blinker.sendRtData("current", String(sensorData.current));
+        Blinker.sendRtData("power", String(sensorData.power));
+        Blinker.sendRtData("frequency", String(sensorData.frequency));
         // Blinker.sendRtData("pf", pzem.pf());
     }
 }
