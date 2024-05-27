@@ -8,3 +8,4 @@ node_modules
 .DS_Store
 data/.DS_Store
 src/.DS_Store
+vue-project/.DS_Store
