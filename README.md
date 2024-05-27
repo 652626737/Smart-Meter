@@ -46,36 +46,49 @@
 2. 转到 `文件 -> 首选项`，在 `附加开发板管理器网址` 中添加以下链接：https://dl.espressif.com/dl/package_esp32_index.json
 3. 打开 `工具 -> 开发板 -> 开发板管理器`，搜索并安装 `esp32`。
 4. 确认 WiFi 库已经安装（通常在安装 ESP32 开发包时会默认包含）。
+5. 国内下载platformio库需要科学上网,或者使用代理.也可以离线安装plaformio库可参考Bilibili视频.
 
 ### PlatformIO
 
 1. 安装 [VS Code](https://code.visualstudio.com/) 和 [PlatformIO 插件](https://platformio.org/install/ide?install=vscode)。
-2. 创建一个新的 PlatformIO 项目，选择 `esp32dev` 开发板。
+2. 打开文件夹git@github.com:652626737/Smart-Meter.git
 3. 在 `platformio.ini` 文件中添加所需的依赖项：
 ```ini
-[env:esp32-solo1]
+[env:esp32dev]
 platform = espressif32
-board = esp32-solo1
+board = esp32dev
 framework = arduino
 upload_protocol = esptool
 upload_speed = 115200
 monitor_speed = 115200
-board_build.f_cpu = 16000000L
+board_build.f_cpu = 24000000L
 build_flags = -D PIO_FRAMEWORK_ARDUINO_MMU_EXTERNAL_128K
-board_build.partitions = no_ota.csv
+board_build.mcu = esp32
+board_build.filesystem = littlefs
+board_build.partitions = partitions_custom.csv
 lib_deps = 
 	joysfera/Tasker@^2.0.3
 	mandulaj/PZEM-004T-v30@^1.1.2
 	mobizt/ESP Mail Client@^3.4.19
 	arduino-libraries/NTPClient@^3.2.1
 	paulstoffregen/Time@^1.6.1
+	xiaozi/Blinker@^0.3.10
 ```
+## 烧录
+### 固件
+1. 连接 ESP32 开发板。
+2. 烧录固件
+[烧录固件](images/Xnip2024-05-27_21-11-19.png)
+[烧录固件](images/Xnip2024-05-27_21-13-40.png)
+
 ## 使用
 ### 配置
-1.在 网页中编辑您的 WiFi 和邮箱配置：
+1.连接开发板AP热点。
+2.打开浏览器，输入192.168.4.1进入配置页面,在网页中编辑您的 WiFi 和邮箱配置：
 ![配置页面](images/Xnip2024-05-25_19-03-58.png)
-2.BlinkerAUTH为下图密钥。
+3.BlinkerAUTH为下图密钥。
 ![BlinkerAUTH](/images/Xnip2024-05-25_19-08-46.png)
+4.WiFil,连接成功后热点自动关闭,WiFi连接失败设备自动开启热点,重复连接步骤2.
 
 ## 常见问题
 1. env:esp32-solo1开发板是单核的一般plaformio需要替换SDK,可以参考https://github.com/tasmota/arduino-esp32/releases
