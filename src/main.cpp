@@ -57,7 +57,6 @@ ESP_Mail_Client_Wrapper mailWrapper(
     smtpServer, smtpPort, emailFrom, passwordemail, emailTo);
 WiFiUDP ntpUDP;
 
-
 extern WebServer server(80);
 
 const long updateInterval = 60000; // 更新间隔，以毫秒为单位
@@ -985,10 +984,13 @@ void setup()
     }
     else
     {
-        while (true)
+        unsigned long startTime = millis();
+        while (millis() - startTime < 30 * 60 * 1000) // 30分钟的时间限制
         {
             server.handleClient();
         }
+        Serial.println("WiFi not connected. Exiting after 5 minutes.");
+        ESP.restart();
     }
 }
 
